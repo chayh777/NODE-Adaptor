@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Pyright
+.pyright/
+
+# Data
+data/cifar-100-python/
+data/cifar-100-python.tar.gz
+
+# Results
+results/
+*.png
+!results/plots/shot5/confidence_distribution.png
+!results/plots/quick_test/confidence_distribution.png
+
+# Logs
+*.log
+
+# Model checkpoints (if you add later)
+*.pth
+*.pt
+checkpoints/

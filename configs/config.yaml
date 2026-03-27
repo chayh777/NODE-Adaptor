@@ -1,0 +1,23 @@
+model:
+  clip_model: "ViT-B/32"
+  embed_dim: 512
+  num_heads: 8
+  ode_steps: 30
+  temperature: 0.07
+
+training:
+  num_shots: [1, 2, 5, 16]
+  num_ways: 5
+  num_query: 15
+  epochs: 10
+  lr: 0.001
+  weight_decay: 0.0001
+  batch_size: 1
+
+data:
+  dataset: "cifar100"
+  data_root: "./data"
+  num_workers: 4
+
+device: "cuda"
+seed: 42
