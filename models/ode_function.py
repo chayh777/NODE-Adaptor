@@ -31,6 +31,11 @@ class ODEFunc(nn.Module):
             nn.Linear(hidden_dim, embed_dim)
         )
         
+        self.time_gate = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.Sigmoid()
+        )
+        
         self.input_proj = nn.Linear(embed_dim, embed_dim)
         
         self.self_attention = nn.MultiheadAttention(
@@ -81,18 +86,26 @@ class ODEFunc(nn.Module):
         elif t.dim() == 0:
             t = t.unsqueeze(0)
         
+        if support_set is not None and support_set.numel() > 0:
+            support_pooled = support_set.mean(dim=1)
+            support_proj = self.input_proj(support_pooled)
+            p_with_context = p + support_proj
+        else:
+            p_with_context = p
+        
         t_emb = self.time_mlp(t.view(1, 1))
         
-        p_with_time = p + t_emb
+        time_gate = self.time_gate(t_emb)
+        p_with_time = p_with_context * time_gate + t_emb * (1 - time_gate)
         
         p_proj = self.input_proj(p_with_time)
         
         attn_output, _ = self.self_attention(
-            p_proj.unsqueeze(1),
-            p_proj.unsqueeze(1),
-            p_proj.unsqueeze(1)
+            p_proj.unsqueeze(0),
+            p_proj.unsqueeze(0),
+            p_proj.unsqueeze(0)
         )
-        attn_output = attn_output.squeeze(1)
+        attn_output = attn_output.squeeze(0)
         
         attn_output = self.layer_norm1(p_with_time + attn_output)
         

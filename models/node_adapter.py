@@ -103,12 +103,13 @@ class NODEAdapter(nn.Module):
             num_shots=K
         )
         
-        return P_0
+        return P_0, visual_features
     
     def optimize_prototypes(
         self,
         p0: torch.Tensor,
-        support_features: torch.Tensor = None
+        support_features: torch.Tensor = None,
+        return_all: bool = False
     ) -> torch.Tensor:
         """
         Optimize prototypes via Neural ODE.
@@ -116,15 +117,22 @@ class NODEAdapter(nn.Module):
         Args:
             p0: (N, D) - initial prototypes
             support_features: optional (N, K, D) - support features for context
+            return_all: if True, return all time steps (T, N, D); if False, return final state (N, D)
             
         Returns:
-            p_optimized: (N, D) - optimized prototypes
+            p_optimized: (N, D) or (T, N, D) - optimized prototypes
         """
         t = torch.linspace(0, 1, self.ode_steps)
         
+        from functools import partial
+        if support_features is not None:
+            ode_func = partial(self.ode_func, support_set=support_features)
+        else:
+            ode_func = self.ode_func
+        
         if self.use_adjoint:
             p_optimized = odeint_adjoint(
-                self.ode_func,
+                ode_func,
                 p0,
                 t,
                 method='rk4',
@@ -135,14 +143,17 @@ class NODEAdapter(nn.Module):
         else:
             from torchdiffeq import odeint
             p_optimized = odeint(
-                self.ode_func,
+                ode_func,
                 p0,
                 t,
                 method='rk4',
                 options={'step_size': 1.0 / self.ode_steps}
             )
         
-        return p_optimized[-1]
+        if return_all:
+            return p_optimized
+        else:
+            return p_optimized[-1]
     
     def classify(
         self,
@@ -173,9 +184,7 @@ class NODEAdapter(nn.Module):
         query_images: torch.Tensor,
         class_names: list,
         prompts: list,
-        return_trajectory: bool = False,
-        num_ways: int = None,
-        num_shots: int = None
+        return_trajectory: bool = False
     ):
         """
         Full forward pass.
@@ -187,33 +196,25 @@ class NODEAdapter(nn.Module):
             class_names: list of class names
             prompts: list of prompt templates
             return_trajectory: whether to return ODE trajectory
-            num_ways: number of ways (classes)
-            num_shots: number of shots per class
             
         Returns:
             logits: (Q, N) - classification logits
             (optional) trajectory: (T, N, D) - prototype trajectory
         """
-        if num_ways is None:
-            num_ways = self.num_classes
-        if num_shots is None:
-            num_shots = support_images.shape[1] if support_images.dim() > 1 else 1
-        
-        p0 = self.build_prototypes(
+        p0, support_features = self.build_prototypes(
             clip_model=clip_model,
             support_images=support_images,
             class_names=class_names,
             prompts=prompts
         )
         
-        p_optimized = self.optimize_prototypes(p0)
+        p_optimized = self.optimize_prototypes(p0, support_features)
         
         query_features = self.encode_images(clip_model, query_images)
         logits = self.classify(query_features, p_optimized)
         
         if return_trajectory:
-            t = torch.linspace(0, 1, self.ode_steps)
-            trajectory = odeint_adjoint(self.ode_func, p0, t)
+            trajectory = self.optimize_prototypes(p0, support_features, return_all=True)
             return logits, trajectory
         else:
             return logits
