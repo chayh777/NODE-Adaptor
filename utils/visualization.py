@@ -342,3 +342,245 @@ def compute_confidence(logits: torch.Tensor) -> np.ndarray:
     probs = torch.softmax(logits, dim=-1)
     confidences = probs.max(dim=-1)[0].cpu().numpy()
     return confidences
+
+
+def plot_model_comparison(
+    results: Dict[str, Dict[str, float]],
+    save_path: str,
+    title: str = "Model Comparison - Few-Shot Classification"
+):
+    """
+    Plot multi-model accuracy comparison as bar chart.
+    
+    Args:
+        results: {
+            'model_name': {'1-shot': acc, '5-shot': acc, '16-shot': acc},
+            ...
+        }
+        save_path: path to save the figure
+        title: plot title
+    """
+    models = list(results.keys())
+    shot_values = list(results[models[0]].keys())
+    
+    x = np.arange(len(shot_values))
+    width = 0.15
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    colors = ['#3498db', '#e74c3c', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c']
+    
+    for i, model in enumerate(models):
+        accuracies = [results[model].get(shot, 0) for shot in shot_values]
+        bars = ax.bar(x + i * width, accuracies, width, label=model, color=colors[i % len(colors)])
+        
+        for bar, acc in zip(bars, accuracies):
+            ax.annotate(f'{acc:.1%}',
+                       xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                       xytext=(0, 3),
+                       textcoords="offset points",
+                       ha='center', va='bottom', fontsize=8)
+    
+    ax.set_xlabel('Shot Setting')
+    ax.set_ylabel('Accuracy')
+    ax.set_title(title)
+    ax.set_xticks(x + width * (len(models) - 1) / 2)
+    ax.set_xticklabels([f'{shot}-shot' for shot in shot_values])
+    ax.legend(loc='lower right')
+    ax.set_ylim(0, 1.1)
+    ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='Random (20-way)')
+    ax.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Model comparison plot saved to: {save_path}")
+
+
+def plot_confidence_comparison(
+    all_results: Dict[str, List[float]],
+    save_path: str,
+    title: str = "Confidence Distribution Comparison"
+):
+    """
+    Plot confidence distribution comparison for multiple models.
+    
+    Args:
+        all_results: {'model_name': [confidences...]}
+        save_path: path to save the figure
+        title: plot title
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    colors = ['#3498db', '#e74c3c', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c']
+    
+    for i, (model, confidences) in enumerate(all_results.items()):
+        ax.hist(confidences, bins=30, alpha=0.5, label=model, color=colors[i % len(colors)])
+    
+    ax.set_xlabel('Confidence')
+    ax.set_ylabel('Frequency')
+    ax.set_title(title)
+    ax.legend()
+    ax.grid(alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Confidence comparison plot saved to: {save_path}")
+
+
+def generate_experiment_report(
+    results: Dict[str, Dict[str, float]],
+    save_path: str,
+    dataset: str = "CIFAR-100",
+    num_tasks: int = 1000
+):
+    """
+    Generate markdown experiment report for multiple models.
+    
+    Args:
+        results: {'model_name': {'1-shot': acc, ...}}
+        save_path: path to save the report
+        dataset: dataset name
+        num_tasks: number of evaluation tasks
+    """
+    models = list(results.keys())
+    shot_values = list(results[models[0]].keys())
+    
+    report = f"""# Few-Shot Classification Experiment Report
+
+## Experiment Settings
+- **Dataset**: {dataset}
+- **Evaluation Tasks**: {num_tasks}
+- **Way**: 5-way
+
+## Results Summary
+
+### Accuracy Table
+
+| Model | {' | '.join([f'{shot}-shot' for shot in shot_values])} |
+|-------|{'|' + '---|' * len(shot_values)}
+"""
+    
+    for model in models:
+        row = f"| {model} "
+        for shot in shot_values:
+            acc = results[model].get(shot, 0)
+            row += f"| {acc:.2%} "
+        row += "|"
+        report += row + "\n"
+    
+    report += f"""
+## Analysis
+
+Best performing model for each shot setting:
+"""
+    
+    for shot in shot_values:
+        best_model = max(models, key=lambda m: results[m].get(shot, 0))
+        best_acc = results[best_model].get(shot, 0)
+        report += f"- **{shot}-shot**: {best_model} ({best_acc:.2%})\n"
+    
+    report += """
+## Conclusion
+
+This experiment compares multiple few-shot learning methods on the CIFAR-100 dataset.
+"""
+    
+    with open(save_path, 'w', encoding='utf-8') as f:
+        f.write(report)
+    
+    print(f"Experiment report saved to: {save_path}")
+    return save_path
+
+
+class MultiModelVisualizer:
+    """Visualizer for multi-model comparison experiments."""
+    
+    def __init__(self, save_dir: str = "./results"):
+        self.save_dir = Path(save_dir)
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.results = {}
+    
+    def add_model_result(self, model_name: str, shot_results: Dict[str, float]):
+        """Add results for a model."""
+        self.results[model_name] = shot_results
+    
+    def plot_comparison(self, experiment_name: str = "model_comparison"):
+        """Generate comparison plots."""
+        plot_dir = self.save_dir / "plots" / experiment_name
+        plot_dir.mkdir(parents=True, exist_ok=True)
+        
+        plot_model_comparison(
+            self.results,
+            str(plot_dir / "accuracy_comparison.png")
+        )
+        
+        generate_experiment_report(
+            self.results,
+            str(plot_dir / "experiment_report.md")
+        )
+    
+    def run_comparison_experiments(
+        self,
+        model_names: List[str],
+        eval_fn,
+        dataset,
+        class_names,
+        prompts,
+        clip_model,
+        device,
+        num_ways: int = 5,
+        shot_values: List[int] = [1, 5, 16],
+        num_tasks: int = 500
+    ):
+        """
+        Run comparison experiments for multiple models.
+        
+        Args:
+            model_names: list of model names to compare
+            eval_fn: evaluation function
+            dataset: dataset to use
+            class_names: class names
+            prompts: prompt templates
+            clip_model: CLIP model
+            device: device to use
+            num_ways: number of ways
+            shot_values: list of shot values to test
+            num_tasks: number of evaluation tasks
+        """
+        for model_name in model_names:
+            print(f"\n{'='*50}")
+            print(f"Evaluating {model_name}")
+            print(f"{'='*50}")
+            
+            shot_results = {}
+            for shot in shot_values:
+                print(f"\n{num_ways}-way {shot}-shot...")
+                
+                from data_loader import create_fewshot_dataloader
+                dataloader = create_fewshot_dataloader(
+                    dataset=dataset,
+                    num_ways=num_ways,
+                    num_shots=shot,
+                    num_query=15,
+                    num_tasks=num_tasks,
+                    batch_size=1
+                )
+                
+                result = eval_fn(
+                    model_name=model_name,
+                    dataloader=dataloader,
+                    class_names=class_names,
+                    prompts=prompts,
+                    clip_model=clip_model,
+                    device=device,
+                    num_eval_tasks=num_tasks
+                )
+                
+                shot_results[f'{shot}-shot'] = result['mean_accuracy']
+                print(f"  Accuracy: {result['mean_accuracy']:.4f} ± {result['std_accuracy']:.4f}")
+            
+            self.add_model_result(model_name, shot_results)
+        
+        return self.results
