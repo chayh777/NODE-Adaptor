@@ -70,7 +70,8 @@ class CrossModalPrototype(nn.Module):
         Returns:
             P_0: (N, D) - initial prototypes p(t_0)
         """
-        lambda_j = torch.sigmoid(P_v @ self.u)
+        u = self.u.to(P_v.dtype)
+        lambda_j = torch.sigmoid(P_v @ u)
         lambda_j = lambda_j.unsqueeze(1)
         
         P_0 = lambda_j * P_v + (1 - lambda_j) * P_t
