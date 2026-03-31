@@ -18,22 +18,29 @@ plt.rcParams['axes.labelsize'] = 12
 class ExperimentLogger:
     """Experiment logger for storing metrics and results."""
     
-    def __init__(self, save_dir: str = "./results", experiment_name: str = None):
+    def __init__(self, save_dir: str = "./results", model: str = None, 
+                 num_ways: int = None, num_shots: int = None, experiment_name: str = None):
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
         
-        if experiment_name is None:
-            experiment_name = f"exp_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        self.experiment_name = experiment_name
+        # 自动生成实验目录名
+        if model and num_ways and num_shots:
+            self.experiment_name = f"{model}_{num_ways}way_{num_shots}shot"
+        elif experiment_name:
+            self.experiment_name = experiment_name
+        else:
+            self.experiment_name = f"exp_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        self.plots_dir = self.save_dir / "plots" / experiment_name
-        self.plots_dir.mkdir(parents=True, exist_ok=True)
+        # 直接在 save_dir 下创建实验目录
+        self.experiment_dir = self.save_dir / self.experiment_name
+        self.experiment_dir.mkdir(parents=True, exist_ok=True)
         
-        self.data_dir = self.save_dir / "data"
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        # 兼容旧接口
+        self.plots_dir = self.experiment_dir
+        self.data_dir = self.experiment_dir
         
         self.experiment_data = {
-            'experiment_name': experiment_name,
+            'experiment_name': self.experiment_name,
             'timestamp': datetime.datetime.now().isoformat(),
             'config': {},
             'train_metrics': [],

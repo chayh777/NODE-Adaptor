@@ -276,7 +276,13 @@ def main():
     set_seed(args.seed)
     
     experiment_name = args.experiment_name or f"{args.model}_{args.num_ways}way_{args.num_shots}shot"
-    logger = ExperimentLogger(experiment_name=experiment_name)
+    logger = ExperimentLogger(
+        save_dir="./results",
+        model=args.model,
+        num_ways=args.num_ways,
+        num_shots=args.num_shots,
+        experiment_name=experiment_name
+    )
     logger.log_config({
         'model': args.model,
         'num_ways': args.num_ways,
